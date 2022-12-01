@@ -9,6 +9,8 @@
  */
 #include "./secret/ssid_password.h"
 
+#define MAX_BUFFER 20
+
 Unit_UHF_RFID uhf;
 WiFiClient wifiClient;
 PubSubClient mqttClient("test.mosquitto.org", 1883, wifiClient);
@@ -29,6 +31,7 @@ IPAddress initWiFi()
 
 bool mqttConnect()
 {
+    mqttClient.setBufferSize(1024);
     if (WiFi.status() != WL_CONNECTED)
     {
         Serial.println("Reconnecting to WiFi...");
@@ -72,23 +75,75 @@ void setup()
     Serial.println(ip);
 }
 
+boolean isInArray(String *array, int arraySize, String value)
+{
+    for (int i = 0; i < arraySize; i++)
+    {
+        if (array[i] == value)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+unsigned long lastSent = 0;
+String epc[20];
+int epcCount = 0;
+
 void loop()
 {
     uint8_t card_count = uhf.pollingMultiple(4);
     Serial.print("\nCount: ");
     Serial.println(card_count);
+
     if (card_count > 0)
     {
+
         for (int i = 0; i < card_count; i++)
         {
-            Serial.print("RSSI: ");
-            Serial.print(uhf.cards[i].rssi_str);
-            Serial.print(" -- PC: ");
-            Serial.print(uhf.cards[i].pc_str);
-            Serial.print(" -- EPC: ");
-            Serial.println(uhf.cards[i].epc_str);
-            sendToMqtt(TOPIC, uhf.cards[i].epc_str);
+            // Serial.print("RSSI: ");
+            // Serial.print(uhf.cards[i].rssi_str);
+            // Serial.print(" -- PC: ");
+            // Serial.print(uhf.cards[i].pc_str);
+            // Serial.print(" -- EPC: ");
+            // Serial.println(uhf.cards[i].epc_str);
+
+            // If the "uhf.cards[i].epc_str" isn't in the "epc" array, add it...
+
+            if (!isInArray(epc, MAX_BUFFER, uhf.cards[i].epc_str))
+            {
+                epc[epcCount] = uhf.cards[i].epc_str;
+                epcCount++;
+            }
+        }
+
+        if (millis() - lastSent > 5000)
+        {
+            lastSent = millis();
+            // Concatenate all the EPCs in a single string
+            String message = "";
+            for (int i = 0; i < epcCount; i++)
+            {
+                message.concat(epc[i]);
+                if (i < epcCount - 1)
+                {
+                    message.concat(";");
+                }
+            }
+            Serial.print("Sending to MQTT: ");
+            Serial.println(message);
+            if (message != "")
+            {
+                sendToMqtt(TOPIC, message);
+            }
+            lastSent = millis();
+            for (int i = 0; i < epcCount; i++)
+            {
+                epc[i] = "";
+            }
+            epcCount = 0;
         }
     }
-    delay(100);
+    delay(500);
 }
