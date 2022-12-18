@@ -3,9 +3,11 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 
-/* Contient :
+/* Contains the SSID and PASSWORD of the WiFi network, and the MQTT that are used topics :
    const char *ssid = "SSID_NAME";
    const char *password = "PASSWORD";
+   const char *TOPIC = "TOPIC";
+   const char *ALIVE_TOPIC = "ALIVE_TOPIC";
  */
 #include "./secret/ssid_password.h"
 
@@ -66,13 +68,12 @@ void setup()
 {
     Serial.begin(115200);
     uhf.begin(&Serial2, 115200, GPIO_NUM_16, GPIO_NUM_17, false);
-    Serial.println("UHF RFID Reader info:");
-    Serial.println("Version: " + uhf.getVersion());
-    Serial.println("Select: " + uhf.selectInfo());
     Serial.println("UHF RFID Reader ready!\n");
+    Serial.print("Connecting to WiFi..");
     IPAddress ip = initWiFi();
     Serial.print("WiFi connected: ");
     Serial.println(ip);
+    sendToMqtt(ALIVE_TOPIC, "Hi");
 }
 
 boolean isInArray(String *array, int arraySize, String value)
@@ -87,7 +88,9 @@ boolean isInArray(String *array, int arraySize, String value)
     return false;
 }
 
+unsigned long lastSendingVerif = 0;
 unsigned long lastSent = 0;
+
 String epc[20];
 int epcCount = 0;
 
@@ -102,15 +105,7 @@ void loop()
 
         for (int i = 0; i < card_count; i++)
         {
-            // Serial.print("RSSI: ");
-            // Serial.print(uhf.cards[i].rssi_str);
-            // Serial.print(" -- PC: ");
-            // Serial.print(uhf.cards[i].pc_str);
-            // Serial.print(" -- EPC: ");
-            // Serial.println(uhf.cards[i].epc_str);
-
-            // If the "uhf.cards[i].epc_str" isn't in the "epc" array, add it...
-
+            // If the "uhf.cards[i].epc_str" isn't in the "epc" array, add it
             if (!isInArray(epc, MAX_BUFFER, uhf.cards[i].epc_str))
             {
                 epc[epcCount] = uhf.cards[i].epc_str;
@@ -118,9 +113,9 @@ void loop()
             }
         }
 
-        if (millis() - lastSent > 5000)
+        if (millis() - lastSendingVerif > 5000)
         {
-            lastSent = millis();
+            lastSendingVerif = millis();
             // Concatenate all the EPCs in a single string
             String message = "";
             for (int i = 0; i < epcCount; i++)
@@ -136,14 +131,22 @@ void loop()
             if (message != "")
             {
                 sendToMqtt(TOPIC, message);
+                // Clear the epc array
+                for (int i = 0; i < epcCount; i++)
+                {
+                    epc[i] = "";
+                }
+                lastSent = millis();
             }
-            lastSent = millis();
-            for (int i = 0; i < epcCount; i++)
-            {
-                epc[i] = "";
-            }
+            lastSendingVerif = millis();
             epcCount = 0;
         }
     }
-    delay(500);
+    if (millis() - lastSent > 15000)
+    {
+        lastSent = millis();
+        Serial.println("Saying Hi! (Alive)");
+        sendToMqtt(ALIVE_TOPIC, "Hi");
+    }
+    delay(20);
 }
