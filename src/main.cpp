@@ -15,7 +15,7 @@
 
 Unit_UHF_RFID uhf;
 WiFiClient wifiClient;
-PubSubClient mqttClient("test.mosquitto.org", 1883, wifiClient);
+PubSubClient mqttClient(MICHAUX_MQTT, MICHAUX_MQTT_PORT, wifiClient);
 
 IPAddress initWiFi()
 {
@@ -43,7 +43,7 @@ bool mqttConnect()
     if (!connected)
     {
         Serial.print("Connecting to MQTT...");
-        mqttClient.connect("esp32_NicoToff");
+        mqttClient.connect("esp32_NicoToff", MICHAUX_MQTT_USERNAME, MICHAUX_MQTT_PASSWORD);
         connected = mqttClient.connected();
         connected ? Serial.println(" Connected!") : Serial.println(" FAILED!!!");
     }
