@@ -23,10 +23,10 @@ Unit_UHF_RFID uhf;
 WiFiClient wifiClient;
 PubSubClient mqttClient(MICHAUX_MQTT, MICHAUX_MQTT_PORT, wifiClient);
 
-unsigned long lastEpcSent = 0;
-unsigned long lastContact = 0;
+unsigned long lastSendingVerif = 0;
+unsigned long lastSent = 0;
 
-String epc[MAX_BUFFER];
+String epc[20];
 int epcCount = 0;
 
 IPAddress initWiFi()
@@ -47,6 +47,7 @@ IPAddress initWiFi()
 
 bool mqttConnect()
 {
+    mqttClient.setBufferSize(1024);
     if (WiFi.status() != WL_CONNECTED)
     {
         Serial.println("Reconnecting to WiFi...");
@@ -86,6 +87,20 @@ bool sendToMqtt(String topic, String message, bool retain = false)
     return sent;
 }
 
+void setup()
+{
+    Serial.begin(115200);
+    pinMode(WIFI_LED, OUTPUT);
+    pinMode(MQTT_LED, OUTPUT);
+    uhf.begin(&Serial2, 115200, GPIO_NUM_16, GPIO_NUM_17, false);
+    Serial.println("UHF RFID Reader ready!\n");
+    Serial.print("Connecting to WiFi..");
+    IPAddress ip = initWiFi();
+    Serial.print("WiFi connected: ");
+    Serial.println(ip);
+    sendToMqtt(ALIVE_TOPIC, "Hi");
+}
+
 boolean isInArray(String *array, int arraySize, String value)
 {
     for (int i = 0; i < arraySize; i++)
@@ -98,31 +113,16 @@ boolean isInArray(String *array, int arraySize, String value)
     return false;
 }
 
-void setup()
-{
-    Serial.begin(115200);
-    pinMode(WIFI_LED, OUTPUT);
-    pinMode(MQTT_LED, OUTPUT);
-    uhf.begin(&Serial2, 115200, GPIO_NUM_16, GPIO_NUM_17, false);
-    Serial.println("UHF RFID Reader ready!\n");
-    Serial.print("Connecting to WiFi..");
-    IPAddress ip = initWiFi();
-    Serial.print("WiFi connected: ");
-    Serial.println(ip);
-    mqttClient.setBufferSize(1024);
-    sendToMqtt(ALIVE_TOPIC, "Hi");
-}
-
 void loop()
 {
-    uint8_t epcCount = uhf.pollingMultiple(4);
+    uint8_t card_count = uhf.pollingMultiple(4);
     Serial.print("\nCount: ");
-    Serial.println(epcCount);
+    Serial.println(card_count);
 
-    if (epcCount > 0)
+    if (card_count > 0)
     {
 
-        for (int i = 0; i < epcCount; i++)
+        for (int i = 0; i < card_count; i++)
         {
             // If the "uhf.cards[i].epc_str" isn't in the "epc" array, add it
             if (!isInArray(epc, MAX_BUFFER, uhf.cards[i].epc_str))
@@ -132,9 +132,9 @@ void loop()
             }
         }
 
-        if (millis() - lastEpcSent > 5000)
+        if (millis() - lastSendingVerif > 5000)
         {
-            lastEpcSent = millis();
+            lastSendingVerif = millis();
             // Concatenate all the EPCs in a single string
             String message = "";
             for (int i = 0; i < epcCount; i++)
@@ -155,15 +155,16 @@ void loop()
                 {
                     epc[i] = "";
                 }
-                lastContact = millis();
+                lastSent = millis();
             }
-            lastEpcSent = millis();
+            lastSendingVerif = millis();
             epcCount = 0;
         }
     }
-    if (millis() - lastContact > 15000)
+    if (millis() - lastSent > 15000)
     {
-        lastContact = millis();
+        lastSent = millis();
+        Serial.println("Saying Hi! (Alive)");
         sendToMqtt(ALIVE_TOPIC, "Hi");
     }
     delay(20);
