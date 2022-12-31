@@ -17,16 +17,16 @@
 #define WIFI_LED 33
 #define MQTT_LED 32
 
-#define MAX_BUFFER 20
+#define MAX_BUFFER 30
 
 Unit_UHF_RFID uhf;
 WiFiClient wifiClient;
 PubSubClient mqttClient(MICHAUX_MQTT, MICHAUX_MQTT_PORT, wifiClient);
 
-unsigned long lastSendingVerif = 0;
-unsigned long lastSent = 0;
+unsigned long lastEpcSent = 0;
+unsigned long lastContact = 0;
 
-String epc[20];
+String epc[MAX_BUFFER];
 int epcCount = 0;
 
 IPAddress initWiFi()
@@ -132,9 +132,9 @@ void loop()
             }
         }
 
-        if (millis() - lastSendingVerif > 5000)
+        if (millis() - lastEpcSent > 5000)
         {
-            lastSendingVerif = millis();
+            lastEpcSent = millis();
             // Concatenate all the EPCs in a single string
             String message = "";
             for (int i = 0; i < epcCount; i++)
@@ -155,15 +155,15 @@ void loop()
                 {
                     epc[i] = "";
                 }
-                lastSent = millis();
+                lastContact = millis();
             }
-            lastSendingVerif = millis();
+            lastEpcSent = millis();
             epcCount = 0;
         }
     }
-    if (millis() - lastSent > 15000)
+    if (millis() - lastContact > 15000)
     {
-        lastSent = millis();
+        lastContact = millis();
         Serial.println("Saying Hi! (Alive)");
         sendToMqtt(ALIVE_TOPIC, "Hi");
     }
