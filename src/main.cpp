@@ -35,7 +35,7 @@ IPAddress initWiFi()
     WiFi.mode(WIFI_STA); // STA = Station = Client
     WiFi.begin(SSID, PASSWORD);
 
-    while (WiFi.status() != WL_CONNECTED) // TODO: Put a LED to show the status
+    while (WiFi.status() != WL_CONNECTED)
     {
         Serial.print('.');
         delay(100);
@@ -115,14 +115,14 @@ void setup()
 
 void loop()
 {
-    uint8_t epc_count = uhf.pollingMultiple(4);
+    uint8_t epcCount = uhf.pollingMultiple(4);
     Serial.print("\nCount: ");
-    Serial.println(epc_count);
+    Serial.println(epcCount);
 
-    if (epc_count > 0)
+    if (epcCount > 0)
     {
 
-        for (int i = 0; i < epc_count; i++)
+        for (int i = 0; i < epcCount; i++)
         {
             // If the "uhf.cards[i].epc_str" isn't in the "epc" array, add it
             if (!isInArray(epc, MAX_BUFFER, uhf.cards[i].epc_str))
