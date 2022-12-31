@@ -115,14 +115,13 @@ boolean isInArray(String *array, int arraySize, String value)
 
 void loop()
 {
-    uint8_t card_count = uhf.pollingMultiple(4);
-    Serial.print("\nCount: ");
-    Serial.println(card_count);
+    uint8_t pollCount = uhf.pollingMultiple(4);
+    Serial.print("\nPoll count: ");
+    Serial.println(pollCount);
 
-    if (card_count > 0)
+    if (pollCount > 0)
     {
-
-        for (int i = 0; i < card_count; i++)
+        for (int i = 0; i < pollCount; i++)
         {
             // If the "uhf.cards[i].epc_str" isn't in the "epc" array, add it
             if (!isInArray(epc, MAX_BUFFER, uhf.cards[i].epc_str))
@@ -140,7 +139,7 @@ void loop()
             for (int i = 0; i < epcCount; i++)
             {
                 message.concat(epc[i]);
-                if (i < epcCount - 1)
+                if (i < epcCount - 1) // "if not last element"
                 {
                     message.concat(";");
                 }
@@ -164,7 +163,6 @@ void loop()
     if (millis() - lastContact > 15000)
     {
         lastContact = millis();
-        Serial.println("Saying Hi! (Alive)");
         sendToMqtt(ALIVE_TOPIC, "Hi");
     }
     delay(20);
