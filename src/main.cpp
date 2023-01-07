@@ -9,7 +9,7 @@
     const char *MICHAUX_MQTT_USERNAME;
     const char *MICHAUX_MQTT_PASSWORD;
     const int MICHAUX_MQTT_PORT;
-    const char *TOPIC;
+    const char *EPC_DISCOVERED_TOPIC;
     const char *ALIVE_TOPIC;
  */
 #include "./secret/ssid_password.h"
@@ -32,12 +32,13 @@ int epcCount = 0;
 IPAddress initWiFi()
 {
     digitalWrite(WIFI_LED, LOW);
+    digitalWrite(MQTT_LED, LOW);
     WiFi.mode(WIFI_STA); // STA = Station = Client
     WiFi.begin(SSID, PASSWORD);
 
     while (WiFi.status() != WL_CONNECTED)
     {
-        Serial.print('.');
+        digitalWrite(WIFI_LED, !digitalRead(WIFI_LED)); // LED blinks when (re))connecting
         delay(100);
     }
 
@@ -50,24 +51,21 @@ bool mqttConnect()
     mqttClient.setBufferSize(1024);
     if (WiFi.status() != WL_CONNECTED)
     {
-        Serial.println("Reconnecting to WiFi...");
         initWiFi();
     }
     bool connected = mqttClient.connected();
     if (!connected)
     {
         digitalWrite(MQTT_LED, LOW);
-        Serial.print("Connecting to MQTT...");
         mqttClient.connect("esp32_NicoToff", MICHAUX_MQTT_USERNAME, MICHAUX_MQTT_PASSWORD);
         connected = mqttClient.connected();
         if (connected)
         {
-            Serial.println(" Connected!");
             digitalWrite(MQTT_LED, HIGH);
         }
         else
         {
-            Serial.println(" FAILED!!!");
+            Serial.println("MQTT connect FAILED!");
         }
     }
     return connected;
@@ -93,10 +91,8 @@ void setup()
     pinMode(WIFI_LED, OUTPUT);
     pinMode(MQTT_LED, OUTPUT);
     uhf.begin(&Serial2, 115200, GPIO_NUM_16, GPIO_NUM_17, false);
-    Serial.println("UHF RFID Reader ready!\n");
-    Serial.print("Connecting to WiFi..");
     IPAddress ip = initWiFi();
-    Serial.print("WiFi connected: ");
+    Serial.print("WiFi connected on: ");
     Serial.println(ip);
     sendToMqtt(ALIVE_TOPIC, "Hi");
 }
@@ -115,16 +111,16 @@ boolean isInArray(String *array, int arraySize, String value)
 
 void loop()
 {
-    uint8_t pollCount = uhf.pollingMultiple(4);
-    Serial.print("\nPoll count: ");
-    Serial.println(pollCount);
+    uint8_t tagCount = uhf.pollingMultiple(4);
+    Serial.print("\nTag count: ");
+    Serial.println(tagCount);
 
-    if (pollCount > 0)
+    if (tagCount > 0)
     {
-        for (int i = 0; i < pollCount; i++)
+        for (int i = 0; i < tagCount; i++)
         {
             // If the "uhf.cards[i].epc_str" isn't in the "epc" array, add it
-            if (!isInArray(epc, MAX_BUFFER, uhf.cards[i].epc_str))
+            if (!isInArray(epc, MAX_BUFFER, uhf.cards[i].epc_str) && epcCount < MAX_BUFFER)
             {
                 epc[epcCount] = uhf.cards[i].epc_str;
                 epcCount++;
@@ -148,7 +144,7 @@ void loop()
             Serial.println(message);
             if (message != "")
             {
-                sendToMqtt(TOPIC, message);
+                sendToMqtt(EPC_DISCOVERED_TOPIC, message);
                 // Clear the epc array
                 for (int i = 0; i < epcCount; i++)
                 {
